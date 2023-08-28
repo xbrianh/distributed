@@ -71,7 +71,8 @@ class ProcessInterface:
         async def _():
             async with self.lock:
                 if self.status == Status.created:
-                    await self.start()
+                    async for _ in self.start():
+                        pass
                     assert self.status == Status.running
             return self
 
@@ -88,6 +89,7 @@ class ProcessInterface:
         to be available after this completes.
         """
         self.status = Status.running
+        yield
 
     async def close(self):
         """Close the process

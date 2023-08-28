@@ -35,7 +35,8 @@ class Process(ProcessInterface):
         weakref.finalize(
             self, self.proc.kill
         )  # https://github.com/ronf/asyncssh/issues/112
-        await super().start()
+        async for i in super().start():
+            yield i
 
     async def close(self):
         if self.proc:
@@ -124,21 +125,20 @@ class Worker(Process):
         )
         self.n_workers = value
 
-    async def start(self, connection=None):
-        if connection is None:
-            try:
-                import asyncssh  # import now to avoid adding to module startup time
-            except ImportError:
-                raise ImportError(
-                    "Dask's SSHCluster requires the `asyncssh` package to be installed. "
-                    "Please install it using pip or conda."
-                )
-
-            self.connection = await asyncssh.connect(
-                self.address, **self.connect_options
+    async def start(self):
+        try:
+            import asyncssh  # import now to avoid adding to module startup time
+        except ImportError:
+            raise ImportError(
+                "Dask's SSHCluster requires the `asyncssh` package to be installed. "
+                "Please install it using pip or conda."
             )
-        else:
-            self.connection = connection
+
+        self.connection = await asyncssh.connect(
+            self.address, **self.connect_options
+        )
+
+        yield self.connection
 
         result = await self.connection.run("uname")
         if result.exit_status == 0:
@@ -194,7 +194,8 @@ class Worker(Process):
             if "worker at" in line:
                 started_workers += 1
         logger.debug("%s", line)
-        await super().start()
+        async for i in super().start():
+            yield i
 
 
 class Scheduler(Process):
@@ -227,23 +228,22 @@ class Scheduler(Process):
         self.connect_options = connect_options
         self.remote_python = remote_python or sys.executable
 
-    async def start(self, connection=None):
-        if connection is None:
-            try:
-                import asyncssh  # import now to avoid adding to module startup time
-            except ImportError:
-                raise ImportError(
-                    "Dask's SSHCluster requires the `asyncssh` package to be installed. "
-                    "Please install it using pip or conda."
-                )
-
-            logger.debug("Created Scheduler Connection")
-
-            self.connection = await asyncssh.connect(
-                self.address, **self.connect_options
+    async def start(self):
+        try:
+            import asyncssh  # import now to avoid adding to module startup time
+        except ImportError:
+            raise ImportError(
+                "Dask's SSHCluster requires the `asyncssh` package to be installed. "
+                "Please install it using pip or conda."
             )
-        else:
-            self.connection = connection
+
+        logger.debug("Created Scheduler Connection")
+
+        self.connection = await asyncssh.connect(
+            self.address, **self.connect_options
+        )
+
+        yield self.connection
 
         result = await self.connection.run("uname")
         if result.exit_status == 0:
@@ -283,7 +283,8 @@ class Scheduler(Process):
                 self.address = line.split("Scheduler at:")[1].strip()
                 break
         logger.debug("%s", line)
-        await super().start()
+        async for i in super().start():
+            yield i
 
 
 old_cluster_kwargs = {
